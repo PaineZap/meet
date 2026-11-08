@@ -1,6 +1,6 @@
 /**
  * LAZIMEET - GenZ Video Conferencing powered by Jitsi Meet API
- * Built for GitHub Pages (100% Client-side, No Backend required)
+ * Optimized for Mobile, Tablet, Desktop with Fluid Background & Shooting Star Sparkles
  */
 
 // DOM Elements
@@ -16,7 +16,34 @@ const btnCopyLink = document.getElementById('btn-copy-link');
 
 let jitsiApi = null;
 
-// Tab Switching on Home Screen
+// --- SHOOTING STAR SPARK EFFECT ON EVERY TOUCH/CLICK ---
+document.addEventListener('pointerdown', (e) => {
+    createSparkle(e.clientX, e.clientY);
+});
+
+function createSparkle(x, y) {
+    const numParticles = 6; // Number of shooting stars per tap
+    for (let i = 0; i < numParticles; i++) {
+        const sparkle = document.createElement('div');
+        sparkle.className = 'sparkle-particle';
+        
+        // Random direction for shooting star rays
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 40 + Math.random() * 80;
+        const tx = Math.cos(angle) * distance;
+        const ty = Math.sin(angle) * distance;
+        
+        sparkle.style.left = `${x}px`;
+        sparkle.style.top = `${y}px`;
+        sparkle.style.setProperty('--tx', `${tx}px`);
+        sparkle.style.setProperty('--ty', `${ty}px`);
+        
+        document.body.appendChild(sparkle);
+        setTimeout(() => sparkle.remove(), 800);
+    }
+}
+
+// Tab Switching
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -27,7 +54,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
 });
 
-// Auto check URL parameters for direct room joining via shared link
+// Auto check URL parameters for direct room joining
 window.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
@@ -36,14 +63,12 @@ window.addEventListener('DOMContentLoaded', () => {
         document.querySelector('[data-tab="join"]').click();
     }
 
-    // Default fun GenZ random names
     const randomNames = ['Nam Phong', 'Thảo My', 'Gia Hân', 'Hoàng Long', 'Minh Thư', 'Quốc Bảo', 'Khánh Linh'];
     const defaultName = randomNames[Math.floor(Math.random() * randomNames.length)];
     if (creatorNameInput) creatorNameInput.value = defaultName;
     if (joinNameInput) joinNameInput.value = defaultName;
 });
 
-// Toast Notification Helper
 function showToast(message, icon = 'fa-solid fa-sparkles') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -54,7 +79,7 @@ function showToast(message, icon = 'fa-solid fa-sparkles') {
     setTimeout(() => toast.remove(), 3500);
 }
 
-// Create Room Button Event
+// Create Room Action
 if (btnCreateRoom) {
     btnCreateRoom.addEventListener('click', () => {
         const name = creatorNameInput.value.trim() || 'GenZ Host';
@@ -63,7 +88,7 @@ if (btnCreateRoom) {
     });
 }
 
-// Join Room Button Event
+// Join Room Action
 if (btnJoinRoom) {
     btnJoinRoom.addEventListener('click', () => {
         const name = joinNameInput.value.trim() || 'GenZ Guest';
@@ -82,14 +107,12 @@ if (btnJoinRoom) {
     });
 }
 
-// Initialize Jitsi Meeting Session
 function startMeeting(roomId, displayName) {
     homeScreen.classList.remove('active');
     meetingScreen.classList.add('active');
     currentRoomBadge.textContent = `Phòng: ${roomId}`;
     showToast('Đang kết nối vào phòng họp...', 'fa-solid fa-spinner fa-spin');
 
-    // Cấu hình Jitsi Meet API sử dụng server cộng đồng hoàn toàn miễn phí
     const domain = "meet.jit.si";
     const options = {
         roomName: "LaziMeet-" + roomId,
@@ -102,7 +125,7 @@ function startMeeting(roomId, displayName) {
         configOverwrite: {
             startWithAudioMuted: false,
             startWithVideoMuted: false,
-            prejoinPageEnabled: false // Bỏ qua trang chờ để vào phòng ngay lập tức
+            prejoinPageEnabled: false
         },
         interfaceConfigOverwrite: {
             TOOLBAR_BUTTONS: [
@@ -120,7 +143,6 @@ function startMeeting(roomId, displayName) {
 
         jitsiApi.addEventListeners({
             readyToClose: () => {
-                // Khi người dùng bấm nút rời phòng (hangup)
                 window.location.href = window.location.pathname;
             },
             participantJoined: (participant) => {
@@ -136,7 +158,6 @@ function startMeeting(roomId, displayName) {
     }
 }
 
-// Copy Invitation Link Button
 if (btnCopyLink) {
     btnCopyLink.addEventListener('click', () => {
         const roomText = currentRoomBadge.textContent.replace('Phòng: ', '');

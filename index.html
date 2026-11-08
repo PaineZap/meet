@@ -2,22 +2,22 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>LaziMeet - Họp trực tuyến Gen Z</title>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Jitsi External API Script -->
-    <script src="https://8x8.vc/external_api.js"></script>
+    <script src="https://meet.jit.si/external_api.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Background Floating Shapes -->
-    <div class="bg-shapes">
-        <div class="shape shape-1"></div>
-        <div class="shape shape-2"></div>
-        <div class="shape shape-3"></div>
+    <!-- Fluid Animated Water Background -->
+    <div class="water-bg">
+        <div class="wave wave1"></div>
+        <div class="wave wave2"></div>
+        <div class="wave wave3"></div>
     </div>
 
     <!-- HOME SCREEN -->
@@ -31,18 +31,27 @@
                     <span class="logo-text">Lazi<span>Meet</span></span>
                 </div>
                 <div class="nav-badge">
-                    <span class="pulse-dot"></span> Gen Z Powered by Jitsi
+                    <span class="pulse-dot"></span> Gen Z Live
                 </div>
             </header>
 
             <main class="hero-content">
                 <div class="hero-text-side">
-                    <h1 class="hero-title">Họp siêu vui, <br>kết nối <span class="gradient-text">cực đỉnh</span>!</h1>
-                    <p class="hero-subtitle">Nền tảng họp trực tuyến miễn phí, giao diện Gen Z đầy màu sắc. Đảm bảo âm thanh, video mượt mà cho hàng chục người tham gia.</p>
+                    <h1 class="hero-title">
+                        <span class="wave-word">Họp</span> 
+                        <span class="wave-word">siêu</span> 
+                        <span class="wave-word">vui,</span> 
+                        <br class="break-desktop">
+                        <span class="wave-word">kết</span> 
+                        <span class="wave-word">nối</span> 
+                        <span class="wave-word gradient-text">cực</span> 
+                        <span class="wave-word gradient-text">đỉnh!</span>
+                    </h1>
+                    <p class="hero-subtitle">Nền tảng họp trực tuyến miễn phí, giao diện Gen Z đầy màu sắc. Tối ưu hoàn hảo cho điện thoại, máy tính bảng và laptop.</p>
                     <div class="hero-features">
-                        <div class="feature-tag"><i class="fa-solid fa-shield-halved"></i> Ổn định tuyệt đối</div>
                         <div class="feature-tag"><i class="fa-solid fa-bolt"></i> Siêu tốc & Miễn phí</div>
-                        <div class="feature-tag"><i class="fa-solid fa-wand-magic-sparkles"></i> Không cần backend</div>
+                        <div class="feature-tag"><i class="fa-solid fa-mobile-screen"></i> Responsive mượt mà</div>
+                        <div class="feature-tag"><i class="fa-solid fa-wand-magic-sparkles"></i> Hiệu ứng chạm lung linh</div>
                     </div>
                 </div>
 
@@ -58,7 +67,7 @@
                             <label><i class="fa-solid fa-user"></i> Tên của bạn</label>
                             <input type="text" id="creator-name" placeholder="Ví dụ: Nam Phong GenZ" autocomplete="off">
                         </div>
-                        <button id="btn-create-room" class="btn btn-primary">
+                        <button id="btn-create-room" class="btn btn-primary ripple">
                             <i class="fa-solid fa-video"></i> Tạo phòng ngay
                         </button>
                     </div>
@@ -70,10 +79,10 @@
                             <input type="text" id="join-name" placeholder="Ví dụ: Thảo My" autocomplete="off">
                         </div>
                         <div class="form-group">
-                            <label><i class="fa-solid fa-key"></i> Tên phòng hoặc Mã phòng</label>
-                            <input type="text" id="room-code-input" placeholder="Nhập tên phòng..." autocomplete="off">
+                            <label><i class="fa-solid fa-key"></i> Mã phòng hoặc Tên phòng</label>
+                            <input type="text" id="room-code-input" placeholder="Nhập mã phòng..." autocomplete="off">
                         </div>
-                        <button id="btn-join-room" class="btn btn-secondary">
+                        <button id="btn-join-room" class="btn btn-secondary ripple">
                             <i class="fa-solid fa-right-to-bracket"></i> Vào phòng họp
                         </button>
                     </div>
@@ -94,13 +103,13 @@
                 <span id="current-room-badge" class="room-badge">Phòng: Đang tải...</span>
             </div>
             <div class="meeting-top-actions">
-                <button id="btn-copy-link" class="top-btn" title="Sao chép đường dẫn mời">
+                <button id="btn-copy-link" class="top-btn ripple" title="Sao chép đường dẫn mời">
                     <i class="fa-solid fa-link"></i> <span>Copy Link</span>
                 </button>
             </div>
         </header>
 
-        <!-- Jitsi Embed Container (Nơi hiển thị video call chuẩn xịn) -->
+        <!-- Jitsi Embed Container -->
         <div class="meeting-body">
             <div id="jitsi-container"></div>
         </div>
